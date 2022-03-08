@@ -546,6 +546,13 @@ std::vector<Shape> compute_shape_repeat(const at::Tensor & self, at::IntArrayRef
   return {Shape(self.scalar_type(), target_size)};
 }
 
+TORCH_API std::vector<Shape> compute_shape__to_copy(const at::Tensor & self, c10::optional<at::ScalarType> dtype, c10::optional<at::Layout> layout, c10::optional<at::Device> device, c10::optional<bool> pin_memory, bool non_blocking, c10::optional<at::MemoryFormat> memory_format) {
+  if(dtype){
+    return {Shape(*dtype, self.sizes().vec())};
+  }
+  return {Shape(self.scalar_type(), self.sizes().vec())};
+}
+
 // Restore unused-parameters warnings
 #pragma GCC diagnostic pop
 
