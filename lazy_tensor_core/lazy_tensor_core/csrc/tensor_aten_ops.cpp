@@ -19,9 +19,7 @@
 #include <torch/csrc/lazy/core/lazy_graph_executor.h>
 #include "lazy_tensor_core/csrc/ops/bernoulli.h"
 #include "lazy_tensor_core/csrc/ops/index_ops.h"
-#include "lazy_tensor_core/csrc/ops/nms.h"
 #include "lazy_tensor_core/csrc/ops/squeeze.h"
-#include "lazy_tensor_core/csrc/ops/svd.h"
 #include "lazy_tensor_core/csrc/ops/ts_native_batch_norm_backward.h"
 #include "lazy_tensor_core/csrc/ops/ts_native_batch_norm_forward.h"
 #include "lazy_tensor_core/csrc/ops/unsqueeze.h"
@@ -241,34 +239,12 @@ std::tuple<torch::lazy::LazyTensorPtr, torch::lazy::LazyTensorPtr, torch::lazy::
                          std::move(grad_bias));
 }
 
-std::pair<torch::lazy::LazyTensorPtr, torch::lazy::LazyTensorPtr> nms(const torch::lazy::LazyTensorPtr& boxes,
-                                      const torch::lazy::LazyTensorPtr& scores,
-                                      const torch::lazy::LazyTensorPtr& score_threshold,
-                                      const torch::lazy::LazyTensorPtr& iou_threshold,
-                                      int64_t output_size) {
-  torch::lazy::NodePtr node = torch::lazy::MakeNode<ir::ops::Nms>(
-      boxes->GetIrValue(), scores->GetIrValue(), score_threshold->GetIrValue(),
-      iou_threshold->GetIrValue(), output_size);
-  return std::pair<torch::lazy::LazyTensorPtr, torch::lazy::LazyTensorPtr>(
-      torch::lazy::LazyTensor::Create(torch::lazy::Value(node, 0), boxes->GetDevice()),
-      torch::lazy::LazyTensor::Create(torch::lazy::Value(node, 1), boxes->GetDevice()));
-}
-
 torch::lazy::LazyTensorPtr permute(const torch::lazy::LazyTensorPtr& input, c10::ArrayRef<int64_t> dims) {
   auto input_shape = input->shape();
   torch::lazy::ViewInfo view_info(
       torch::lazy::ViewInfo::Type::kPermute, input_shape,
       torch::lazy::GetCanonicalDimensionIndices(dims, input_shape.Get().dim()));
   return input->CreateViewTensor(std::move(view_info));
-}
-
-torch::lazy::LazyTensorPtr rsub(const torch::lazy::LazyTensorPtr& input, const at::Scalar& other,
-                const at::Scalar& alpha) {
-  torch::lazy::Value alpha_ir = torch::lazy::LazyGraphExecutor::Get()->GetIrValueForExpandedScalar(
-      alpha, input->shape(), input->GetDevice());
-  torch::lazy::Value other_ir = torch::lazy::LazyGraphExecutor::Get()->GetIrValueForExpandedScalar(
-      other, input->shape(), input->GetDevice());
-  return torch::lazy::LazyTensor::Create(other_ir - alpha_ir * input->GetIrValue(), input->GetDevice());
 }
 
 void copy_(torch::lazy::LazyTensorPtr& input, torch::lazy::LazyTensorPtr& src) {
@@ -339,33 +315,6 @@ void squeeze_(torch::lazy::LazyTensorPtr& input, int64_t dim) {
   input->SetIrValue(torch::lazy::MakeNode<ir::ops::Squeeze>(
       input->GetIrValue(),
       torch::lazy::GetCanonicalDimensionIndex(dim, input->shape().Get().dim())));
-}
-
-torch::lazy::LazyTensorPtr sub(const torch::lazy::LazyTensorPtr& input, const torch::lazy::LazyTensorPtr& other,
-               const at::Scalar& alpha) {
-  torch::lazy::Value constant = torch::lazy::LazyGraphExecutor::Get()->GetIrValueForExpandedScalar(
-      alpha, other->shape(), other->GetDevice());
-  return torch::lazy::LazyTensor::Create(input->GetIrValue() - other->GetIrValue() * constant, input->GetDevice());
-}
-
-torch::lazy::LazyTensorPtr sub(const torch::lazy::LazyTensorPtr& input, const at::Scalar& other,
-               const at::Scalar& alpha) {
-  torch::lazy::Value other_constant =
-      torch::lazy::LazyGraphExecutor::Get()->GetIrValueForExpandedScalar(other, input->shape(),
-                                                    input->GetDevice());
-  torch::lazy::Value alpha_constant =
-      torch::lazy::LazyGraphExecutor::Get()->GetIrValueForExpandedScalar(alpha, input->shape(),
-                                                    input->GetDevice());
-  return torch::lazy::LazyTensor::Create(input->GetIrValue() - other_constant * alpha_constant, input->GetDevice());
-}
-
-std::tuple<torch::lazy::LazyTensorPtr, torch::lazy::LazyTensorPtr, torch::lazy::LazyTensorPtr> svd(const torch::lazy::LazyTensorPtr& input,
-                                                   bool some, bool compute_uv) {
-  torch::lazy::NodePtr node =
-      torch::lazy::MakeNode<ir::ops::SVD>(input->GetIrValue(), some, compute_uv);
-  return std::make_tuple(torch::lazy::LazyTensor::Create(torch::lazy::Value(node, 0), input->GetDevice()),
-                         torch::lazy::LazyTensor::Create(torch::lazy::Value(node, 1), input->GetDevice()),
-                         torch::lazy::LazyTensor::Create(torch::lazy::Value(node, 2), input->GetDevice()));
 }
 
 torch::lazy::LazyTensorPtr transpose(const torch::lazy::LazyTensorPtr& input, int64_t dim0, int64_t dim1) {
